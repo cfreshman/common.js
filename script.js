@@ -37,8 +37,8 @@ if (!window['common.js']) {
             document.head.append((x => Object.assign(x, { innerHTML:xhr(src) }))(document.createElement('script')))
         }
     }
-    window.server = (location.port === '3030') ? location.origin : 'https://freshman.dev'
     if (!is_server) {
+        window.server = (location.port === '3030') ? location.origin : 'https://freshman.dev'
         dependency(server + '/lib/2/ve/ve.js')
         dependency(server + '/lib/2/css/script.js')
     }
@@ -270,6 +270,7 @@ if (!window['common.js']) {
     })(document.createElement('div'))
     window.span = (content='') => node(`<span>${content}</span>`)
     window.div = (content='') => node(`<div>${content}</div>`)
+    window.style = (x, cssText) => Object.assign(x.style, Object.fromEntries(cssText.split(/[;\n]/).filter(x=>x).map(l => l.split(':').map(x=>x.trim()))))
 
     window.range = (a,o,e=1) => Array.from({ length: Math.floor((o===undefined?a:o-a)/e) }).map((_, i) => i*e + (o===undefined?0:a))
     window.merge = (...os) => {
@@ -282,7 +283,20 @@ if (!window['common.js']) {
         })
         return result
     }
-    window.transmute = (o, O, X=undefined) => merge({}, ...Object.keys(o).map(k => (typeof(o[k]) === 'object' && !Array.isArray(o[k])) ? { [k]: transmute(o[k], f) } : X ? { [k]: X(o[k]) } : O(k, o[k])))
+    window.transmute = (o, O, X=undefined) => {
+        // recursively transform object with functions
+        const resolved = Object.keys(o).map(k =>
+            (typeof(o[k]) === 'object' && !Array.isArray(o[k]))
+            ? { [k]: transmute(o[k], O) }
+            : X
+                ? { [k]: X(o[k]) }
+                : O(k, o[k]))
+        
+        return merge(
+            {},
+            ...resolved
+        )
+    }
     window.deletion = (o={}) => transmute(o, (k,v)=> v ? { [k]: undefined } : {})
     window.pick = (object, delimited_keys, delimiter=' ') => list(delimited_keys, delimiter).reduce((o, k) => { o[k] = object[k]; return o }, {})
     window.unpick = (object, delimited_keys, delimiter=' ') => list(delimited_keys, delimiter).reduce((o, k) => { delete o[k]; return o }, {...object})
@@ -372,7 +386,8 @@ if (!window['common.js']) {
         f: (a=1,o,e=1) => (i => i*e + (o===undefined?0:a))(Math.random() * ((o===undefined?a:o-a)/e)),
         s: (a=1,o,e=1) => (i => i*e + (o===undefined?0:a) - ((o===undefined?a:o-a)/e))(Math.random() * 2 * ((o===undefined?a:o-a)/e)),
         i: (a=2,o,e=1) => Math.floor(rand.f(a,o,e)),
-        sample: (ar, n=undefined) => n === undefined ? ar[rand.i(ar.length)] : range(n).map(() => sample(ar)),
+        sample: (ar, n=undefined) => n === undefined ? ar[rand.i(ar.length)] : range(n).map(() => rand.sample(ar)),
+        pick: (ar, n=undefined) => n === undefined ? ar.splice(rand.i(ar.length), 1)[0] : range(n).map(() => rand.pick(ar)),
         weighted: (o, n=undefined) => {
             const total = math.sum(Object.values(o))
             let picks
