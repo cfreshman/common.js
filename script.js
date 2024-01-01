@@ -14,11 +14,6 @@ if (!window['common.js']) {
 
     window.debug = console.debug.bind(console)
     window.named_log = (name, print=console.debug.bind(console)) => (...x) => print(`[${name}]`, ...x)
-    'c' in window || Object.defineProperties(window, {
-        c: {
-            get: () => console.clear()
-        },
-    })
     const log = named_log('common.js')
 
     window.xhr = src => {
@@ -38,9 +33,11 @@ if (!window['common.js']) {
         }
     }
     if (!is_server) {
-        window.server = (location.port === '3030') ? location.origin : 'https://freshman.dev'
+        window.dev = (location.port === '3030') ? true : false
+        window.server = dev ? location.origin : 'https://freshman.dev'
         dependency(server + '/lib/2/ve/ve.js')
         dependency(server + '/lib/2/css/script.js')
+        dependency(server + '/lib/2/store/script.js')
     }
 
     // window.dependency_import = /* synchronous import with parallelized calls */ (import_definition={
@@ -110,14 +107,6 @@ if (!window['common.js']) {
 
     window.isNonArrayObject = (x) => !Array.isArray(x) && typeof(x) === 'object'
     window.isString = (x) => typeof(x) === 'string'
-    window.strings = {
-        json: {
-            parse: JSON.parse,
-            stringify: JSON.stringify,
-            pretty: (object) => JSON.stringify(object, null, 2),
-            equal: (a, b) => JSON.stringify(a) === JSON.stringify(b), eq:(...x)=>strings.json.equal(...x),
-        },
-    }
 
     window.list = (data='', seperator=' ') => typeof(data) === 'string' ? data.split(seperator) : Array.from(data)
     window.set = (data='', seperator=' ') => new Set(list(data, seperator))
@@ -136,6 +125,14 @@ if (!window['common.js']) {
         order: (xs, is) => is.map(i => xs[i]),
         first: (xs, n) => xs.slice(0,n),
         last: (xs, n) => xs.slice(n-1),
+
+        group: (xs, n) => {
+            const groups = []
+            for (let i = 0; i < xs.length; i += n) {
+                groups.push(xs.slice(i, Math.min(xs.length, i + n)))
+            }
+            return groups
+        },
 
         objectable: (data='', seperator=' ') => {
             const _objectable = (x) => {
@@ -203,15 +200,28 @@ if (!window['common.js']) {
     window.bounds = (ar) => (x => {x.push(x[1]-x[0]);return x})([Math.min(...ar), Math.max(...ar)])
     window.bound = (ar, x) => (([min, max]) => Math.max(min, Math.min(x, max)))(bounds(ar))
     window.norm = (ar, x) => (([min, max]) => (bound(ar, x) - min) / (max - min))(bounds(ar))
-    window.math = {
+    window.maths = window.math = {
+        TAU: 2 * Math.PI,
+        max: (ar) => Math.max(...ar),
+        min: (ar) => Math.min(...ar),
         sum, product,
+        lerp: (a, b, p) => {
+            return (1 - p) * a + p * b
+        },
+        round: (x, pr=0) => {
+            const round = Math.pow(10, pr)
+            return Math.round(x * round) / round
+        },
     }
 
     window.elapsed = (a, b=Date.now()) => {
         ;[a, b] = [a, b].map(Number)
         return b - a
     }
-    window.duration = ({ms=0,s=0,m=0,h=0,d=0,w=0,mo=0,y=0,de=0,c=0,mi=0}={}) => Math.ceil((((((mi*1000 + c*100 + de*10 + y) * 365 + (mo) * (365/12) + (w) * 7 + d) * 24 + h) * 60 + m) * 60 + s) * 1_000 + ms)
+    window.duration = ({
+        ms=0,s=0,m=0,h=0,d=0,w=0,mo=0,y=0,de=0,c=0,mi=0,
+        MI=mi||0, C=c||0, DE=de||0, Y=y||0, M=mo||0, W=w||0, D=d||0,
+    }={}) => Math.ceil((((((MI*1000 + C*100 + DE*10 + Y) * 365 + (M) * (365/12) + (W) * 7 + D) * 24 + h) * 60 + m) * 60 + s) * 1_000 + ms)
     window.offset = (d, ms) => new Date(Number(d) + ms)
     window.datetime = {
         elapsed, duration, offset,
@@ -223,7 +233,6 @@ if (!window['common.js']) {
         utc: (date=Date.now()) => datetime.tz(date, 0),
         ymd: (date=Date.now()) => {
           if (typeof(date) === 'number') date = new Date(date)
-
           return [date.getFullYear(), date.getMonth() + 1, date.getDate()].map(x => String(x).padStart(2, '0')).join('-')
         },
         yyyymmdd: (...x)=>datetime.ymd(...x),
@@ -244,6 +253,23 @@ if (!window['common.js']) {
             s && d.setSeconds(s)
             ms && d.setMilliseconds(ms)
             return d
+        },
+        timer: () => {
+            let start = performance.now()
+            let last = start
+            return {
+                start,
+                elapsed: () => {
+                    const now = performance.now()
+                    const elapsed = now - last
+                    last = now
+                    return elapsed
+                },
+                total: () => performance.now() - start,
+                reset: () => {
+                    last = start = performance.now()
+                }
+            }
         },
     }
 
@@ -270,7 +296,7 @@ if (!window['common.js']) {
     })(document.createElement('div'))
     window.span = (content='') => node(`<span>${content}</span>`)
     window.div = (content='') => node(`<div>${content}</div>`)
-    window.style = (x, cssText) => Object.assign(x.style, Object.fromEntries(cssText.split(/[;\n]/).filter(x=>x).map(l => l.split(':').map(x=>x.trim()))))
+    window.style = (x, css_text) => Object.assign(x.style, Object.fromEntries(css_text.split(/[;\n]/).filter(x=>x).map(l => l.split(':').map(x=>x.trim()))))
 
     window.range = (a,o,e=1) => Array.from({ length: Math.floor((o===undefined?a:o-a)/e) }).map((_, i) => i*e + (o===undefined?0:a))
     window.merge = (...os) => {
@@ -362,8 +388,17 @@ if (!window['common.js']) {
                 }
             }
             return x.reduce((p,x)=>string.prefix(p, x))
-        }
+        },
     }
+    window.strings = Object.assign({}, string, {
+        json: {
+            parse: JSON.parse,
+            stringify: JSON.stringify,
+            pretty: (object) => JSON.stringify(object, null, 2),
+            equal: (a, b) => JSON.stringify(a) === JSON.stringify(b), eq:(...x)=>strings.json.equal(...x),
+            clone: (x) => JSON.parse(JSON.stringify(x)),
+        },
+    })
     window.compare = {
         stringify: (...xs) => {
             const stringified = xs.map(JSON.stringify)
@@ -386,6 +421,13 @@ if (!window['common.js']) {
         f: (a=1,o,e=1) => (i => i*e + (o===undefined?0:a))(Math.random() * ((o===undefined?a:o-a)/e)),
         s: (a=1,o,e=1) => (i => i*e + (o===undefined?0:a) - ((o===undefined?a:o-a)/e))(Math.random() * 2 * ((o===undefined?a:o-a)/e)),
         i: (a=2,o,e=1) => Math.floor(rand.f(a,o,e)),
+        generate: (n, method, constraint) => {
+            let samples = new Array(n)
+            do {
+                for (let i = 0; i < n; i++) samples[i] = method(i)
+            } while (!constraint(...samples))
+            return samples
+        },
         sample: (ar, n=undefined) => n === undefined ? ar[rand.i(ar.length)] : range(n).map(() => rand.sample(ar)),
         pick: (ar, n=undefined) => n === undefined ? ar.splice(rand.i(ar.length), 1)[0] : range(n).map(() => rand.pick(ar)),
         weighted: (o, n=undefined) => {
@@ -431,6 +473,7 @@ if (!window['common.js']) {
 
     window.auth = { user:false, token:undefined }
     if (!is_server) window.api = (()  => {
+        const AUTH_COOKIE = 'loginAuth'
         const origin = location.origin
         const api = {
             get:    {},
@@ -450,7 +493,10 @@ if (!window['common.js']) {
                     } else if (res.ok) {
                         console.debug('ok', url, data)
                         const { user, token } = data
-                        if (user !== undefined) Object.assign(auth, { user, token })
+                        if (user !== undefined) {
+                            Object.assign(auth, { user, token })
+                            store.set(AUTH_COOKIE, auth)
+                        }
                         return data
                     } else {
                         data.error = `failed ${service} ${path}: ${data.message}`
@@ -482,8 +528,68 @@ if (!window['common.js']) {
                 body: has_body ? JSON.stringify(body) : undefined,
             })
         })
+        const stored_auth = store.get(AUTH_COOKIE)
+        if (stored_auth) {
+            auth.user = stored_auth.user
+            auth.token = stored_auth.token
+        }
         return api
     })()
+    window.apis = {
+        server, api,
+        toForm: data => {
+            return new URLSearchParams(data).toString()
+        },
+        format: (url, options) => {
+            let query = ''
+            if (options.query) {
+                const url_URL = new URL(url)
+                url = url_URL.origin + url_URL.pathname
+                options.query = {
+                    ...(options.query || {}),
+                    ...Object.fromEntries(new URLSearchParams(url_URL.search)),
+                }
+                query =  '?' + apis.toForm(options.query)
+            }
+            return encodeURI(url) + query
+        },
+        external: (url, method='GET', options = {
+            query: undefined, headers: undefined, form: undefined, json: undefined, nocors: undefined, target: undefined
+        }) => {
+            const formatted = apis.format(url, options)
+            const headers = options.headers || {}
+            if (options.json) headers['Content-Type'] = 'application/json'
+            if (options.form) headers['Content-Type'] = 'application/x-www-form-urlencoded'
+            const init = {
+                mode: options.nocors ? 'no-cors' : undefined,
+                method,
+                headers: headers,
+                body: options.json !== undefined
+                ? JSON.stringify(options.json)
+                : options.form
+                    ? apis.toForm(options.form)
+                    : undefined
+            }
+            console.debug('API EXTERNAL', method, formatted, init)
+            if (method === 'OPEN') return Promise.resolve(open(formatted, top !== window ? '_blank' : options.target || '_blank') && undefined)
+            return fetch(formatted, init)
+            .then(res => {
+                if (res.headers.get('Content-Type')?.includes('application/json')) {
+                    return res.json().then(data => {
+                        if (data.error) {
+                            console.debug('api error:', data)
+                            throw data
+                        } else if (res.ok) {
+                            return data
+                        } else {
+                            console.debug('server error:', data)
+                            throw data
+                        }
+                    })
+                } else return res
+            })
+        }
+    }
 
     if (!is_server) setTimeout(() => {
         QQ('textarea.resize').map(t => {
@@ -528,6 +634,64 @@ if (!window['common.js']) {
             Object.assign(node('<a></a>'), { download, href }).click()
             URL.revokeObjectURL(href)
         }, 'image/png', 1)
+    }
+
+    const _canvas_ctx = (img_or_canvas) => {
+        let canvas, ctx
+        if (img_or_canvas.getContext) {
+            canvas = img_or_canvas
+            ctx = canvas.getContext('2d')
+        } else {
+            canvas = node('canvas')
+            canvas.height = img_or_canvas.height
+            canvas.width = img_or_canvas.width
+            ctx = canvas.getContext('2d')
+            ctx.drawImage(img_or_canvas, 0, 0)
+        }
+        return {canvas, ctx}
+    }
+    window.canvases = {
+        download: downloadCanvas,
+        data: (img_or_canvas) => {
+            const {canvas, ctx} = _canvas_ctx(img_or_canvas)
+            const {data:raw_data} = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            const data = M.ne(range(canvas.height).map(r => range(canvas.width).map(c => V.ne(range(3).map(i => raw_data[(r * canvas.width * 4) + (c * 4) + i])))))
+            return data
+        },
+        replace: (img_or_canvas, color_map, tolerance=255 / 4) => {
+            const {canvas} = _canvas_ctx(img_or_canvas)
+            const data_v = canvases.data(canvas)
+            const color_map_v = color_map.map(pair => pair.map(V.ne))
+
+            const {canvas:out_canvas, ctx:out_ctx} = _canvas_ctx(node('canvas'))
+            out_canvas.height = canvas.height
+            out_canvas.width = canvas.width
+            out_ctx.drawImage(img_or_canvas, 0, 0)
+
+            log(data_v, data_v.m, data_v.n, color_map_v)
+
+            color_map_v.map(([from, to]) => {
+                out_ctx.fillStyle = `rgb(${to.join(' ')})`
+                for (let r = 0; r < data_v.m; r++) {
+                    for (let c = 0; c < data_v.n; c++) {
+                        if (V.ad(data_v[r][c], from.sc(-1)).ma() < tolerance) {
+                            out_ctx.fillRect(c, r, 1, 1)
+                        }
+                    }
+                }
+            })
+            return out_canvas
+        },
+        draw: (ctx, data) => {
+            data = M.ne(data)
+            // const raw_data = ctx.createImageData(data.m, data.n)
+            // range(data.m).map(r => range(data.n).map(c => range(3).map(i => raw_data[(r * canvas.width * 4) + (c * 4) + i] = data[r][c][i])))
+            // ctx.putImageData(raw_data, 0, 0)
+            range(data.m).map(r => range(data.n).map(c => {
+                ctx.fillStyle = `rgb(${data[r][c].join(' ')})`
+                ctx.fillRect(c, r, 1, 1)
+            }))
+        },
     }
 
     const _displayStatus_active = {}
@@ -652,6 +816,37 @@ if (!window['common.js']) {
                 }
             })
             return l
+        },
+        modal: (f_close) => {
+            html.style.overflow = 'hidden'
+            const modal_container = node(`<div class="modal-container" onclick="
+            if (event.target === event.currentTarget) {
+                event.target.remove()
+                html.style.overflow = ''
+            }
+            " style="
+            position: fixed; top: 0; left: 0; height: 100%; width: 100%; background: #0004;
+            display: flex; align-items: center; justify-content: center;
+            ">
+                <div class="modal" style="
+                height: max-content;
+                width: max-content;
+                background: #fff;
+                border: 1px solid #000;
+                padding: .5em;
+                "></div>
+            </div>`)
+            const modal = Q(modal_container, '.modal')
+            const inner = f_close(() => {
+                modal_container.remove()
+                html.style.overflow = ''
+            })
+            if (inner.tagName) {
+                modal.append(inner)
+            } else {
+                modal.innerHTML = inner
+            }
+            document.body.append(modal_container)
         },
     }
 
