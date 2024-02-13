@@ -36,6 +36,7 @@ if (!window['common.js']) {
         window.dev = (location.port === '3030') ? true : false
         window.server = dev ? location.origin : 'https://freshman.dev'
         dependency(server + '/lib/2/ve/ve.js')
+        dependency(server + '/lib/2/se.ts/script.js')
         dependency(server + '/lib/2/css/script.js')
         dependency(server + '/lib/2/store/script.js')
     }
@@ -108,8 +109,8 @@ if (!window['common.js']) {
     window.isNonArrayObject = (x) => !Array.isArray(x) && typeof(x) === 'object'
     window.isString = (x) => typeof(x) === 'string'
 
-    window.list = (data='', seperator=' ') => typeof(data) === 'string' ? data.split(seperator) : Array.from(data)
-    window.set = (data='', seperator=' ') => new Set(list(data, seperator))
+    window.list = (data=[], seperator=' ') => typeof(data) === 'string' ? data.split(seperator) : Array.from(data)
+    window.set = (data=[], seperator=' ') => new Set(list(data, seperator))
     window.lists = {
         of: list,
         remove: (xs, x) => {
@@ -206,6 +207,7 @@ if (!window['common.js']) {
         min: (ar) => Math.min(...ar),
         sum, product,
         lerp: (a, b, p) => {
+            p = Math.max(0, Math.min(p, 1))
             return (1 - p) * a + p * b
         },
         round: (x, pr=0) => {
